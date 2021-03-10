@@ -9,7 +9,7 @@ string gnuifier(string argument) {
 
 int main( int argc, char *argv[] ) {
    if ( argc != 2 ) {
-     cout << "Maar 1 argument nodig" << endl;
+     cerr << "Maar 1 argument nodig" << endl;
    } else {
      cout << gnuifier(argv[1]) << endl;
    }
