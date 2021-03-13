@@ -27,60 +27,52 @@ void new_file() { // ToDo: Implementeer volgens specificatie.
      cout << "error" << endl;
   }
   
-  int write_new_file = syscall(SYS_write, create_new_file, c_file_text, file_text.length());
+  int write_to_new_file = syscall(SYS_write, create_new_file, c_file_text, file_text.length());
   close(create_new_file);
-  close(write_new_file);
+  close(write_to_new_file);
 }
 
 void list() {
-    int pid = syscall(SYS_fork);                             
-    const char* args[] = { "/bin/ls", "-l", "-a", NULL };                            
-    if (pid == 0){
-        syscall(SYS_execve, args[0], args, NULL);
-    }
-    else {
-      cout << pid << syscall(SYS_wait4, pid, NULL, NULL) << endl;
-    }
-}       
+  int fork = syscall(SYS_fork);
+  const string location = "/bin/ls";
+  const char *arguments[] = {location.c_str(), "-la", NULL};
+  
+  if (fork == 0) {
+    syscall(SYS_execve,location.c_str(), arguments, NULL);
+  } else {
+    cout << syscall(SYS_wait4, fork, NULL, NULL) << endl;
+  }
+}
 
-void find() // ToDo: Implementeer volgens specificatie.
-{
-    string zoekwoord;
-    int fd[2];
-    
-    cout << "Op welk woord wil je zoeken:";
-    cin >> zoekwoord;
-    syscall(SYS_pipe, &fd, NULL);
-    int pid = syscall(SYS_fork);
-    if (pid==0){
-        int pid2 = syscall(SYS_fork);
-        if (pid2==0){
-            syscall(SYS_close, fd[0]);
-            syscall(SYS_dup2, fd[1], 1);
-            const char* args[] = { "/usr/bin/find", ".", NULL };
-            int find = syscall(SYS_execve, args[0], args, NULL);
-            
-        } else{
-            syscall(SYS_close, fd[1]);
-            syscall(SYS_dup2, fd[0], 0);
-            const char* args2[] = { "/bin/grep", zoekwoord.c_str(), NULL};
-            syscall(SYS_execve, args2[0], args2, NULL);
-            int exit = 0;
-            cout << exit << "\n";    
-            int exit_status = syscall(SYS_wait4, pid2, NULL);
-            cout << "child died1," << exit << ", " << exit_status << "\n"; 
-            }
-        }
-    else if (pid>0){
-        int exit = 0;
-        cout << exit << "\n";    
-        int exit_status = syscall(SYS_wait4, pid, NULL);
-        cout << "child died2," << exit << ", " << exit_status << " ," << pid << endl; 
-        return;
-    }
-    else{
-      cout << "fork_failed" << endl;
-    }
+
+void find() {
+  string woord;
+  int pipe_A[2];
+  
+  cout << "Woord: ";
+  cin >> woord;
+ 
+  syscall(SYS_pipe,pipe_A);
+  
+  pid_t pid_A, pid_B;
+  
+  if( !(pid_A = fork()) ) {
+    const string find_location = "/bin/find";
+    const char *find_arguments[] = {find_location.c_str(), ".", NULL};
+
+    syscall(SYS_dup2,pipe_A[1], 1); /* redirect standard output to pipe_A write end */
+    syscall(SYS_execve, find_location.c_str(), find_arguments, NULL);
+  }
+  
+  if( !(pid_B = fork()) ) {
+    const string grep_location = "/bin/grep";
+    const char *grep_arguments[] = {grep_location.c_str(), woord.c_str(), NULL};
+
+    syscall(SYS_dup2,pipe_A[0], 0); /* redirect standard input to pipe_A read end */
+    syscall(SYS_execve, grep_location.c_str(), grep_arguments, NULL);
+    syscall(SYS_close,pid_A);
+    syscall(SYS_close,pid_B);
+  }
 }
 
 void seek() { // ToDo: Implementeer volgens specificatie.
@@ -88,26 +80,29 @@ void seek() { // ToDo: Implementeer volgens specificatie.
 }
 
 void src() {                                                // Voorbeeld: Gebruikt SYS_open en SYS_read om de source van de shell (shell.cc) te printen.
-  int fd = syscall(SYS_open, "foo.txt", O_RDONLY, 0755);    // Gebruik de SYS_open call om een bestand te openen.
+  int fd = syscall(SYS_open, "rshell.cpp", O_RDONLY, 0755); // Gebruik de SYS_open call om een bestand te openen.
   char byte[1];                                             // 0755 zorgt dat het bestand de juiste rechten krijgt (leesbaar is).
   while(syscall(SYS_read, fd, byte, 1))                     // Blijf SYS_read herhalen tot het bestand geheel gelezen is,
     std::cout << byte;                                      // zet de gelezen byte in "byte" zodat deze geschreven kan worden.
 }                                 
 
 int main() {
-  string input;
-  string readprompt;
-  string prompt;
+  string input, readprompt, prompt;
 
   // een hiden file zoals de meeste configuratie files van shells.
   ifstream readPrompt(".rshell");
 
+  // lees het bestand uit.
   while (getline (readPrompt, readprompt)) {
     prompt = readprompt;
   }
-  readPrompt.close(); 
+  readPrompt.close();
+  
+  // Lege commandline 
   cout << "\033[2J\033[1;1H";
+  
   while(true) {
+    // begin van prompt komt uit config file .rshell.
     cout << prompt << " ";
     getline(std::cin, input);
     if (input == "exit") {
