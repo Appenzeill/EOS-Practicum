@@ -47,36 +47,61 @@ void list() {
 
 void find() {
   string woord;
-  int pipe_A[2];
+  int pipeA[2];
   
   cout << "Woord: ";
   cin >> woord;
  
-  syscall(SYS_pipe,pipe_A);
+  syscall(SYS_pipe,pipeA);
   
-  pid_t pid_A, pid_B;
+  pid_t pidA, pidB;
   
-  if( !(pid_A = fork()) ) {
+  if( !(pidA = syscall(SYS_fork)) ) {
     const string find_location = "/bin/find";
     const char *find_arguments[] = {find_location.c_str(), ".", NULL};
 
-    syscall(SYS_dup2,pipe_A[1], 1); /* redirect standard output to pipe_A write end */
+    syscall(SYS_dup2,pipeA[1], 1); /* redirect standard output to pipe_A write end */
     syscall(SYS_execve, find_location.c_str(), find_arguments, NULL);
+
   }
-  
-  if( !(pid_B = fork()) ) {
+  if( !(pidB = syscall(SYS_fork))) {
+
     const string grep_location = "/bin/grep";
     const char *grep_arguments[] = {grep_location.c_str(), woord.c_str(), NULL};
 
-    syscall(SYS_dup2,pipe_A[0], 0); /* redirect standard input to pipe_A read end */
+    syscall(SYS_dup2,pipeA[0], 0); /* redirect standard input to pipe_A read end */
     syscall(SYS_execve, grep_location.c_str(), grep_arguments, NULL);
-    syscall(SYS_close,pid_A);
-    syscall(SYS_close,pid_B);
+    syscall(SYS_close,pidA);
+    syscall(SYS_close,pidB);
+    cout << "test \n";
   }
 }
 
 void seek() { // ToDo: Implementeer volgens specificatie.
-  cout << "ToDo: Implementeer hier seek()" << endl;
+  string file_seek = "seek";
+  string file_loop = "loop";
+ 
+  // lseek is veel sneller dan de loop.
+  int create_new_seek = syscall(SYS_open, file_seek.c_str(), O_CREAT | O_RDWR | O_TRUNC, 0666);
+  int write_to_seek = syscall(SYS_write, create_new_seek, "x", 1);
+  int lseek = syscall(SYS_lseek, create_new_seek,5000000,SEEK_CUR);
+  int write_to_seek_2 = syscall(SYS_write, create_new_seek, "x", 1);
+
+  if ((syscall(write_to_seek) == 0) || (syscall(lseek) == 0) || (syscall(write_to_seek_2) == 0)) {
+     cout << "error met lseek" << endl;
+  }
+  
+  // de loop kost veel meer tijd.
+  int create_new_loop = syscall(SYS_open, file_loop.c_str(), O_CREAT | O_RDWR | O_TRUNC, 0666);
+  int write_to_loop_0 = syscall(SYS_write, create_new_loop, "x", 1);
+  for (unsigned int i = 0; i < 5000000; i++) {
+    int write_to_loop_1 = syscall(SYS_write, create_new_loop, "\0", 1);
+  }
+  int write_to_loop_2 = syscall(SYS_write, create_new_loop, "x", 1);
+
+  if ((syscall(write_to_loop_0) == 0) || (syscall(write_to_loop_2) == 0)) {
+     cout << "error met de loop" << endl;
+  }
 }
 
 void src() {                                                // Voorbeeld: Gebruikt SYS_open en SYS_read om de source van de shell (shell.cc) te printen.
@@ -93,10 +118,12 @@ int main() {
   ifstream readPrompt(".rshell");
 
   // lees het bestand uit.
+  // if (status != false) {
   while (getline (readPrompt, readprompt)) {
     prompt = readprompt;
   }
   readPrompt.close();
+  //} 
   
   // Lege commandline 
   cout << "\033[2J\033[1;1H";
@@ -115,6 +142,8 @@ int main() {
       find();
     } else if (input == "src") {
       src();
+    } else if (input == "seek") {
+      seek();
     } else if (input == "clear") {
       cout << "\033[2J\033[1;1H";
     } else {
